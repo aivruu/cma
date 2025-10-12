@@ -8,4 +8,7 @@ include_directories(.)
 add_executable(cma main.c
         alloc.c
         alloc.h
-        block.h)
+        block_split.c
+        block_merge.c
+        block_split.h
+        block_merge.h)
