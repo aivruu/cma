@@ -1,70 +1,84 @@
 #include <sys/mman.h>
 #include <stdint.h>
 
-#include "block_split.h"
+#include "block_algorithm.h"
 
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-// the first node.
+/* the first node. */
 header_t *first = NULL;
-// the last node.
+/* the last node. */
 header_t *last = NULL;
 
-void align_to_pagesize(size_t *src) {
-  // -------------------------
-  // Page-size alignment.
-  // -------------------------
-  //
-  // To provide a valid size for the reserve, we need to align the value to be a multiple of the page-size for this machine, usually 4096 bytes (4KB) for
-  // x64 systems.
-  //
-  // If the user provides a number that isn't a multiple of the page-size, the operation below will round it up to a valid multiple,
-  // so the value may be 4096, 8192, etc. No matter what size the user provides as it will be rounded to a valid multiple.
-  //
-  // But, this operation could return 0 if the user provides a negative value, but always we ensure the size is valid (>= 0), so it won't be a problem.
-  *src = (*src | pagesize - 1) + 1;
+unsigned int align(const unsigned int src) {
+  /* ----------------------
+   *  Page-size alignment.
+   * ----------------------
+   *
+   * Simple operation to align the user's bytes-amount allocated with the in memory page-size (4096 bytes for x64 systems).
+   *
+   * The size is "added" with the page-size (minus 1 because it could be out of bound), plus 1 to align it correctly, this operation
+   * automatically rounds up the number to be a multiple of the page-size, so if the user wants to reserve just 40 bytes, the system will
+   * give him a full chunk of 4K (4096 bytes).
+   *
+   * This operation also could return 0 if the user provides a negative value, but always we ensure the size is valid. so it won't be a
+   * problem.
+   */
+  return (src | pagesize - 1) + 1;
 }
 
-void *alloc(const size_t size) {
-  if (size <= 0) return NULL;
+void *alloc(unsigned int size) {
+  if (size == 0) return NULL;
 
-  // -------------------------
-  // Block-splitting algorithm logic.
-  // -------------------------
-  //
-  // If there's a free-block that meets the size requested by the user, we can either give the user the entire block (if sizes match), or instead,
-  // we split the block, and we gave the user the addr to that space for write the data.
+  size += MEM_HEADER_OVERHEAD;
+  /*
+   * Before reserve any memory-amount, we check if there's a free-block that has enough size to store the amount of data the user wants to,
+   * if no block was found with such specifications, request a new memory-region to the OS, otherwise.
+   *
+   * Instead of split the block directly, we can give the user that block if the size of the node is the same as the user requested (with
+   * the header-overhead included). Otherwise, we split the block to accommodate the user's data
+   */
   header_t *free_block = find_free_block(size);
   if (free_block != NULL) {
     if (free_block->size == size) {
-      free_block->is_free = 0;
+      free_block->is_free = false;
       return (void *) free_block + MEM_HEADER_OVERHEAD;
     }
-    void *next = split_block(free_block, size);
+    /* ----------------------------------
+     *  Block-splitting algorithm logic.
+     * ----------------------------------
+     *
+     * If there's a free-block that meets the size requested by the user, we can either give the user the entire block (if sizes match), or
+     * instead, we split the block, and we gave the user the addr to that space for write the data.
+     */
+    header_t *next = split(free_block, size);
     if (next != NULL) {
       if (last == free_block) {
         last = next;
       }
-      // return the addr to the next block, this block was split from the original so its size is reduced to store the user's data.
-      // next-block's addr + new block's header overhead = user's addr
-      return next;
+      return (void *) next + MEM_HEADER_OVERHEAD; // user's data space
     }
-    // no enough space in the block, so we need to reserve more memory.
   }
 
-  // -------------------------
-  // Memory-reserve logic.
-  // -------------------------
-  //
-  // As no free-block existed for the user's reserve, we need to request another memory-region to the operating-system, at that region start we'll
-  // write the metadata for the header (such as size, is_free or the next-block). Then we give the user the addr after the header to write his data.
-  size_t total_size = size + MEM_HEADER_OVERHEAD;
-  align_to_pagesize(&total_size);
-  // as the mapping is anonymous, we set -1 for the fd and 0 for the offset;
-  void *ptr = mmap(NULL, total_size, MEM_PROT_FLAGS, MEM_MAP_FLAGS, -1, 0);
+  /* -----------------------
+   *  Memory-reserve logic.
+   * -----------------------
+   *
+   * It is very simple, to request memory to the system first we must ensure the in-bytes amount of memory to reserve is aligned with the
+   * system's in memory page-size, so the memory-accesses can be made as quickly as possible. For the flags we just specify that our memory
+   * space must be private and non-shared between processes, and that the region may be readable and writable.
+   *
+   * As the mapping is anonymous, we set -1 for the fd and 0 for the offset;
+   *
+   * If the alloc fails, the most common reason is because the system doesn't have enough memory to provide, other reasons may involve
+   * invalid arguments (that may or not be related to the system config).
+   *
+   * After the memory is allocated, we write all our metadata (that will be used to locate the block and manipulate it) at the start of the
+   * address, and the next-addr (addr + header size in bytes) is which we give the user to write his data in it.
+   */
+  void *ptr = mmap(NULL, align(size), MEM_PROT_FLAGS, MEM_MAP_FLAGS, -1, 0);
   if (ptr == MAP_FAILED /* or (void *) -1 */) {
     perror("mmap");
     // failed to reserve, might be due to no memory available.
@@ -72,9 +86,8 @@ void *alloc(const size_t size) {
   }
   header_t *node = ptr;
   node->size = size;
-  node->is_free = 0;
+  node->is_free = false;
   node->next = NULL;
-
   // update linked-list.
   if (first == NULL) {
     first = node;
@@ -83,14 +96,13 @@ void *alloc(const size_t size) {
     last->next = node;
     last = node;
   }
-
   return ptr + MEM_HEADER_OVERHEAD;
 }
 
-void *find_free_block(const size_t size) {
+void *find_free_block(const unsigned int size) {
   header_t *start = first;
   while (start != NULL) {
-    if (start->is_free && start->size >= size) {
+    if (start->size >= size) {
       return start;
     }
     start = start->next;
@@ -101,30 +113,24 @@ void *find_free_block(const size_t size) {
 void dealloc(void *addr) {
   if (addr == NULL) return;
 
-  // Get the header for this block.
-  //
-  // It shouldn't be null as the given address is valid.
+  // get the header for this block
   header_t *node = addr - MEM_HEADER_OVERHEAD;
-  node->is_free = 1;
-
-  // TODO: implement block-merging logic
-
-  // if the node is not the last block, just mark it as free.
-  if (node != last) {
+  if (munmap(node, align(node->size)) == -1) {
+    perror("munmap");
     return;
   }
-  // there's just one block left?
-  if (first == last) {
+  // there's just one node left?
+  if (node == last) {
     first = NULL;
     last = NULL;
     return;
   }
-  // the block is neither the first nor the last, so we need to find it.
   header_t *current = first;
   while (current->next != NULL && current->next != last) {
+    if (current->next == node) {
+      merge(node, current);
+    }
     current = current->next;
   }
   last = current;
-
-  // we could implement a logic to handle the sbrk here as this block is in the "middle" of the memory-region, but as I'm using mmap, I won't do it by now.
 }
