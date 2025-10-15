@@ -1,10 +1,9 @@
 #ifndef CMA_ALLOC_H
 #define CMA_ALLOC_H
-#include <stdbool.h>
-#endif
 
-#include <stddef.h>
-#include <unistd.h>
+#include <stdbool.h>
+
+#endif
 
 /* Allocated memory is only readable and writable. */
 #define MEM_PROT_FLAGS (PROT_READ | PROT_WRITE)
@@ -20,16 +19,8 @@ typedef struct header_t {
   struct header_t *next;  /* A pointer to the next node. */
 } header_t;
 
-/*
- * Page size of the system that is used to align the memory allocations to work with the system.
- *
- * As far as I know, some syscalls for memory-allocation may not provide a correct or aligned block-size (memory) within the page-size,
- * so we need to align that value to be "valid" with page-size which may variate depending on the system-architecture (x86 or x64).
- */
-static unsigned long pagesize;
-static void get_pagesize() {
-  pagesize = sysconf(_SC_PAGESIZE);
-}
+/* Retrieves and stores the memory page-size value from the system. */
+void init_pagesize();
 
 /*
  * Aligns the given bytes-amount to be a multiple of the page-size for this machine.

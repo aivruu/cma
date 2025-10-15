@@ -1,16 +1,22 @@
 #include <sys/mman.h>
-#include <stdint.h>
 
 #include "block_algorithm.h"
 
 #include <errno.h>
 #include <stdio.h>
-#include <string.h>
+#include <unistd.h>
 
-/* the first node. */
+/* The first node. */
 header_t *first = NULL;
-/* the last node. */
+/* The last node. */
 header_t *last = NULL;
+/* The memory page-size for the system. */
+unsigned long pagesize;
+
+void init_pagesize() {
+  pagesize = sysconf(_SC_PAGESIZE);
+  printf("Page-size in memory for the system: %ld bytes\n", pagesize);
+}
 
 unsigned int align(const unsigned int src) {
   /* ----------------------
@@ -113,9 +119,8 @@ void *find_free_block(const unsigned int size) {
 void dealloc(void *addr) {
   if (addr == NULL) return;
 
-  // get the header for this block
   header_t *node = addr - MEM_HEADER_OVERHEAD;
-  if (munmap(node, align(node->size)) == -1) {
+  if (munmap(node, node->size) == -1) {
     perror("munmap");
     return;
   }
