@@ -1,5 +1,7 @@
 #include "block_algorithm.h"
 
+#include <stddef.h>
+
 header_t *split(header_t *src, const unsigned int reserve) {
   const unsigned int size_without_header = reserve - MEM_HEADER_OVERHEAD;
   if (src->size < size_without_header) {
