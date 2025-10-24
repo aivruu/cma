@@ -6,6 +6,9 @@ typedef struct pos_t {
   float z;
 } pos_t;
 
+/* Retrieves and stores the memory page-size value from the system. */
+void init_pagesize();
+
 int main() {
   // retrieve and store the page-size for this machine.
   init_pagesize();
