@@ -19,13 +19,10 @@ typedef struct header_t {
   struct header_t *next;  /* A pointer to the next node. */
 } header_t;
 
-/* Retrieves and stores the memory page-size value from the system. */
-void init_pagesize();
-
 /*
  * Aligns the given bytes-amount to be a multiple of the page-size for this machine.
  * e.g. x64 systems -> 4096 bytes (in most cases).
- * The provided value is changed in-place.
+ * Returns the aligned size.
  */
 unsigned int align(unsigned int src);
 
@@ -41,8 +38,5 @@ void *alloc(unsigned int size);
  */
 void *find_free_block(unsigned int size);
 
-/*
- * Deallocates the memory at the given pointer.
- * Returns 0 on success, -1 on failure (e.g. invalid address).
- */
+/* Deallocates the memory at the given pointer. */
 void dealloc(void *addr);
