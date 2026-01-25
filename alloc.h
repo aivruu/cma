@@ -14,29 +14,55 @@
 
 /* A struct that represents a metadata-container for a block in a memory-region. */
 typedef struct header_t {
-  unsigned int size;      /* The total-size that this chunk uses (header + user's space). */
-  bool is_free;           /* Whether the block is free for new data or not. */
-  struct header_t *next;  /* A pointer to the next node. */
+  unsigned int size;     /* The total-size that this chunk uses (header + user's space). */
+  bool is_free;          /* Whether the block is free for new data or not. */
+  struct header_t *next; /* A pointer to the next node. */
 } header_t;
 
 /*
- * Aligns the given bytes-amount to be a multiple of the page-size for this machine.
- * e.g. x64 systems -> 4096 bytes (in most cases).
- * Returns the aligned size.
+ * Aligns the value to be a multiple of this machine's page-size.
+ * 
+ * The value must be aligned if we want to access fast to read some value, the page-size
+ * may change depending on the machine's architecture. For x86-64 and major machines, the page-size in
+ * virtual-memory is of 4096 bytes (or 4KiB).
+ *
+ * The function will perform the alignment over the given value, mutating it, so no new value is returned
+ * as result.
  */
-unsigned int align(unsigned int src);
+void align_to_pagesize(unsigned int *value);
 
 /*
- * Basic alloc-functionality, allocates the requested numbers of bytes and returns a pointer to it.
- * Returns NULL if the allocation failed (e.g. out of memory). Otherwise, a pointer to the memory-block is returned.
+ * Reserves the specified amount of memory (bytes) and returns a pointer to the
+ * memory-block's address.
+ *
+ * If there's a free-block that meets the expected-size, then the block will be
+ * marked as occuped and the function will return a pointer to the address ahead
+ * that block.
+ *
+ * If the block has available-size to accomodate the user's reserved-memory, then
+ * it will be splitted into another block and a pointer will be returned by the
+ * function.
+ *
+ * If no free-block was found, we'll request another region to the operating-system,
+ * as the region's size will depend on the machine virtual-memory's page-size (x64 or x86),
+ * then the function will write some metadata at the start of the block to store information
+ * about it and help to identify it, finally, the function will return a pointer to the address
+ * ahead of the block for the user to write.
+ *
+ * Returns a pointer to a writable memory-chunk, or NULL if no more memory could've requested.
  */
 void *alloc(unsigned int size);
 
 /*
- * Finds a free-block (header_t) which is large enough to hold the requested size.
+ * Finds a free-block which is large enough to hold the requested data amount.
  * Returns NULL if no suitable block was found. Otherwise, a pointer to that node is returned.
  */
 void *find_free_block(unsigned int size);
 
-/* Deallocates the memory at the given pointer. */
+/*
+ * Frees the memory ahead of the given pointer.
+ *
+ * If there's a region of memory-chunks behind the released block, then it will
+ * be merged within the region-block.
+ */
 void dealloc(void *addr);
