@@ -13,7 +13,7 @@ header_t *last = NULL;
 /* The memory page-size for the system. */
 unsigned long pagesize;
 
-void init_pagesize() {
+void init_pagesize(void) {
   pagesize = sysconf(_SC_PAGESIZE);
   printf("Page-size in memory for the system: %ld bytes\n", pagesize);
 }

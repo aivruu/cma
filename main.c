@@ -7,9 +7,9 @@ typedef struct pos_t {
 } pos_t;
 
 /* Retrieves and stores the memory page-size value from the system. */
-void init_pagesize();
+void init_pagesize(void);
 
-int main() {
+int main(void) {
   // retrieve and store the page-size for this machine.
   init_pagesize();
 
