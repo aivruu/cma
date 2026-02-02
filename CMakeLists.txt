@@ -4,8 +4,6 @@ project(cma C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include_directories(.)
-
 add_executable(cma main.c
         alloc.c
         alloc.h
