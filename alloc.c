@@ -111,7 +111,7 @@ void *alloc(unsigned int size) {
   }
   header_t *node = ptr;
   node->size = size;
-  node->is_free = true;
+  node->is_free = false;
   node->next = NULL;
   // update linked-list.
   if (first == NULL) {
@@ -136,10 +136,11 @@ void *find_free_block(const unsigned int size) {
 }
 
 void dealloc(void *addr) {
-  if (addr == NULL)
+  if (addr == NULL) {
     return;
-
+  }
   header_t *node = addr - MEM_HEADER_OVERHEAD;
+  node->is_free = true;
   if (munmap(node, node->size) == -1) {
     perror("munmap");
     return;
