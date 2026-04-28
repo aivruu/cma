@@ -25,7 +25,7 @@ void align_to_pagesize(unsigned int *value) {
    * /---------------------------------/
    *
    * -> Simple operation to align the user's bytes-amount allocated with the in
-   *    memory page-size (4096 bytes for x64 systems).
+   *    memory page-size.
    *
    * -> The size is "added" with the page-size (minus 1 because it could be out
    *    of bound), plus 1 to align it correctly, this operation automatically
